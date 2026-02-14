@@ -195,7 +195,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Process pixels in row major order.
                 for r in 0..height {
                     for c in 0..width {
-                        let pixel_index = (r * 1080 + c) as usize;
+                        let pixel_index = (r * width + c) as usize;
                         let decoded_pixel_difference = dec.decode(&pixel_difference_pdf, &mut br).to_owned();
                         pixel_difference_pdf.incr_count(&decoded_pixel_difference);
 

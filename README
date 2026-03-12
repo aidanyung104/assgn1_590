@@ -4,6 +4,6 @@ After class, I experimented with the values to figure out why there was no impro
 
 Because we only check the pixels above and to the left, the top row could never reach the threshold of four temporally good pixels, thus it was being routed to temporally_bad. Then because of that, a cascading effect would take place and all pixels were being routed to temporally_bad_pdf. To solve this, I added more pdfs and stored them in a vector.
 
-To solve this, I implemented a vector that would store new probability distribution functions, up to five different ones. Because we only check don't check the pixels below, the maximum temporally coherent neighbors we can have are 4. So I made 5 probability distribution functions (like bins, sorting pixels into 0-4 temporally coherent neighbors).
+To solve this, I implemented a vector that would store new probability distribution functions, up to five different ones. Because we only check don't check the pixels below, the maximum temporally coherent neighbors we can have are 4. So I made 5 probability distribution functions (like bins, sorting pixels into 0-4 temporally coherent neighbors). Now, it sorts each pixel into a bin and those bins are assigned to different pdfs, so if temporal compression is not great they switch functions.
 
 When I ran the in-class example, the compression ratio is now up to 2.62, showing improvement from the approach we did in class that had errors.

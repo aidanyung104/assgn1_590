@@ -92,7 +92,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set up initial prior frame as uniform medium gray (y = 128)
     let mut prior_frame = vec![128 as u8; (width * height) as usize];
-
+    let mut temporally_coherent = vec![true; (width * height) as usize];
+    
     let output_file = match File::create(&output_file_path) {
         Err(_) => panic!("Error opening output file"),
         Ok(f) => f,
@@ -105,11 +106,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut enc = Encoder::new();
 
-    // Set up arithmetic coding context(s)
-    let mut pixel_difference_pdf = VectorCountSymbolModel::new((0..=255).collect());
+    // Replace the two PDFs with five
+    let mut pdfs: Vec<VectorCountSymbolModel<u8>> = Vec::new();
+    for _ in 0..5 {
+        pdfs.push(VectorCountSymbolModel::new((0u8..=255u8).collect()));
+    }
 
     // Process frames
-    for frame in iter.filter_frames() {
+    for frame in iter.filter_frames() { // Example scheme, 2.5x compression
         if frame.frame_num < skip_count {
             if verbose {
                 println!("Skipping frame {}", frame.frame_num);
@@ -126,18 +130,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     // Encode difference with same pixel in prior frame.
                     // Normalize and modulate difference to 8-bit range.
-                    let pixel_difference = (((current_frame[pixel_index] as i32)
+                    let pixel_difference = ((((current_frame[pixel_index] as i32)
                         - (prior_frame[pixel_index] as i32))
                         + 256)
-                        % 256;
+                        % 256) as u8;
 
-                    enc.encode(&pixel_difference, &pixel_difference_pdf, &mut bw);
 
+                    let mut temp_coherent_neighbor_count = 0;
+
+                    for dr in -1..=1 as i32 {
+                        for dc in -1..=1 as i32 {
+                            let nr = r as i32 + dr;
+                            let nc = c as i32 +dc;
+                            if nr >= 0 && nr < height as i32 && // Potential neighbor is in the frame vertically
+                               nc >= 0 && nc < width as i32 &&  // Potential neighbor is in the frame horizontally
+                               (dr != 0 || dc != 0) &&          // Potential neighbor is not same as target
+                               nr <= r as i32 &&                // Potential neighbor is not in next row
+                               (nc <= c as i32 || nr < r as i32)// Potential neighbor is not in target row beyond target column
+                               { // check for temporal coherent neighbor
+                                if temporally_coherent[(nr * width as i32 + nc) as usize] {
+                                    temp_coherent_neighbor_count += 1;
+                                }
+                            }
+                        }
+                    }
+
+                    // if r != 0 {
+                    //     if c!= 0 {
+                    //         if temporally_coherent[pixel_index-width-1] {
+                    //             temp_coherent_neighbor_count += 1;
+                    //         }
+                    //     } else {
+
+                    //     }
+                    // }
+                    //now if temporal encoding is bad, it switches to a new probability distribution function. 
+                    let context = temp_coherent_neighbor_count.min(4) as usize;
+                    enc.encode(&pixel_difference, &pdfs[context], &mut bw);
+                    pdfs[context].incr_count(&pixel_difference);
+
+                    if pixel_difference <= 25 || pixel_difference >= 231 {
+                        temporally_coherent[pixel_index] = true;
+                    } else {
+                        temporally_coherent[pixel_index] = false;
+                    }
                     // Update context
-                    pixel_difference_pdf.incr_count(&pixel_difference);
+
                 }
             }
-
+            // can do same thing, but spatial coherence (sum pixel values nearby, encode the difference) -- OR, if temporal difference is large, switch to spatial and vice versa
             prior_frame = current_frame;
 
             let bits_written_at_end = enc.bits_written();
